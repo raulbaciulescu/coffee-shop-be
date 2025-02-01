@@ -7,8 +7,8 @@ public record ProductResponse(
         Integer id,
         String name,
         Double price,
-        byte[] mainImage,
-        List<byte[]> galleryImages,
+        String mainImage,
+        List<String> galleryImages,
         String description,
         String origin,
         String roastLevel

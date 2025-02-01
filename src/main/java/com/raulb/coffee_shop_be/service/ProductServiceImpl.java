@@ -6,7 +6,6 @@ import com.raulb.coffee_shop_be.dto.ProductResponse;
 import com.raulb.coffee_shop_be.repository.ProductRepository;
 import com.raulb.coffee_shop_be.service.api.ProductService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -18,8 +17,7 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class ProductServiceImpl implements ProductService {
     private final ProductRepository productRepository;
-    @Value("${images.baseUrl}")
-    private String baseUrl;
+    private final AzureBlobStorageService azureBlobStorageService;
 
     @Override
     public List<ProductResponse> getProducts() {
@@ -33,12 +31,12 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     public void addProduct(ProductDto productDto) throws IOException {
-        String mainImageUrl = baseUrl + productDto.mainImage().getOriginalFilename();
-        FileService.saveFile(productDto.mainImage(), baseUrl);
-        StringBuilder stringBuilder = new StringBuilder();
+        String mainImageUrl = azureBlobStorageService.uploadFile(productDto.mainImage());
+
+        StringBuilder galleryUrls = new StringBuilder();
         for (var image : productDto.galleryImages()) {
-            String url = FileService.saveFile(image, baseUrl);
-            stringBuilder.append(url).append(";");
+            String url = azureBlobStorageService.uploadFile(image);
+            galleryUrls.append(url).append(";");
         }
 
         Product product = Product.builder()
@@ -48,7 +46,7 @@ public class ProductServiceImpl implements ProductService {
                 .price(productDto.price())
                 .roastLevel(productDto.roastLevel())
                 .mainImageUrl(mainImageUrl)
-                .galleryImagesUrls(stringBuilder.toString())
+                .galleryImagesUrls(galleryUrls.toString())
                 .build();
 
         productRepository.save(product);
@@ -59,28 +57,31 @@ public class ProductServiceImpl implements ProductService {
         Optional<Product> oldProductOptional = productRepository.findById(id);
         oldProductOptional.ifPresent(oldProduct -> {
             String mainImageUrl = oldProduct.getMainImageUrl();
+
+            // Update main image if provided
             if (newProduct.mainImage() != null) {
-                mainImageUrl = baseUrl + newProduct.mainImage().getOriginalFilename();
                 try {
-                    FileService.saveFile(newProduct.mainImage(), baseUrl);
+                    mainImageUrl = azureBlobStorageService.uploadFile(newProduct.mainImage());
                 } catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
-            }
-            StringBuilder stringBuilder = new StringBuilder(oldProduct.getGalleryImagesUrls());
-            if (newProduct.galleryImages() != null) {
-                stringBuilder = new StringBuilder();
-                for (var image : newProduct.galleryImages()) {
-                    String url;
-                    try {
-                        url = FileService.saveFile(image, baseUrl);
-                    } catch (IOException e) {
-                        throw new RuntimeException(e);
-                    }
-                    stringBuilder.append(url).append(";");
+                    throw new RuntimeException("Failed to upload main image", e);
                 }
             }
 
+            // Update gallery images if provided
+            StringBuilder galleryUrls = new StringBuilder(oldProduct.getGalleryImagesUrls());
+            if (newProduct.galleryImages() != null) {
+                galleryUrls = new StringBuilder();
+                for (var image : newProduct.galleryImages()) {
+                    try {
+                        String url = azureBlobStorageService.uploadFile(image);
+                        galleryUrls.append(url).append(";");
+                    } catch (IOException e) {
+                        throw new RuntimeException("Failed to upload gallery image", e);
+                    }
+                }
+            }
+
+            // Update product details
             Product product = Product.builder()
                     .id(id)
                     .name(newProduct.name() != null ? newProduct.name() : oldProduct.getName())
@@ -89,7 +90,7 @@ public class ProductServiceImpl implements ProductService {
                     .price(newProduct.price() != null ? newProduct.price() : oldProduct.getPrice())
                     .roastLevel(newProduct.roastLevel() != null ? newProduct.roastLevel() : oldProduct.getRoastLevel())
                     .mainImageUrl(mainImageUrl)
-                    .galleryImagesUrls(stringBuilder.toString())
+                    .galleryImagesUrls(galleryUrls.toString())
                     .build();
 
             productRepository.save(product);
@@ -104,21 +105,23 @@ public class ProductServiceImpl implements ProductService {
     @Override
     public ProductResponse getProductsById(Integer productId) {
         return productRepository.findById(productId)
-                .map(this::mapFromProductToProductResponse).orElse(null);
+                .map(this::mapFromProductToProductResponse)
+                .orElse(null);
     }
 
-    private ProductResponse mapFromProductToProductResponse(Product p) {
-        List<byte[]> galleryImages = getGalleryImages(p.getGalleryImagesUrls());
-        return new ProductResponse(p.getId(), p.getName(), p.getPrice(),
-                FileService.getBytesAsFile(p.getMainImageUrl()), galleryImages,
-                p.getDescription(), p.getOrigin(), p.getRoastLevel()
-        );
-    }
-
-    private List<byte[]> getGalleryImages(String galleryImagesUrls) {
-        List<String> galleryImagesUrlsList = Arrays.stream(galleryImagesUrls.split(";")).toList();
-        return galleryImagesUrlsList.stream()
-                .map(FileService::getBytesAsFile)
+    private ProductResponse mapFromProductToProductResponse(Product product) {
+        List<String> galleryImages = Arrays.stream(product.getGalleryImagesUrls().split(";"))
                 .toList();
+
+        return new ProductResponse(
+                product.getId(),
+                product.getName(),
+                product.getPrice(),
+                product.getMainImageUrl(),
+                galleryImages,
+                product.getDescription(),
+                product.getOrigin(),
+                product.getRoastLevel()
+        );
     }
 }

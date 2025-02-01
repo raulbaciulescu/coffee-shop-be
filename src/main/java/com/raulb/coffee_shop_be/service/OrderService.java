@@ -1,12 +1,18 @@
 package com.raulb.coffee_shop_be.service;
 
 import com.raulb.coffee_shop_be.domain.Order;
+import com.raulb.coffee_shop_be.domain.OrderItem;
 import com.raulb.coffee_shop_be.dto.OrderDto;
 import com.raulb.coffee_shop_be.dto.OrderItemDto;
+import com.raulb.coffee_shop_be.repository.OrderItemRepository;
 import com.raulb.coffee_shop_be.repository.OrderRepository;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -14,6 +20,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class OrderService {
     private final OrderRepository orderRepository;
+    private final OrderItemRepository orderItemRepository;
 
     public List<OrderDto> getAllOrders() {
         // Fetch all orders from the repository
@@ -53,13 +60,37 @@ public class OrderService {
         return orderRepository.findById(id).orElseThrow(() -> new RuntimeException("Order not found"));
     }
 
-    public Order createOrder(Order order) {
-        return orderRepository.save(order);
+    @Transactional
+    public OrderDto createOrder(OrderDto orderDto) {
+        Order order = Order.builder()
+                .customerName(orderDto.getCustomerName())
+                .phone(orderDto.getPhone())
+                .address(orderDto.getAddress())
+                .total(orderDto.getTotal())
+                .status("pending")
+                .createdAt(new Date())
+                .build();
+
+        List<OrderItem> orderItems = new ArrayList<>();
+
+        for (OrderItemDto itemDto : orderDto.getItems()) {
+            OrderItem orderItem = OrderItem.builder()
+                    .order(order)
+                    .quantity(itemDto.getQuantity())
+                    .price(itemDto.getPrice())
+                    .name(itemDto.getName())
+                    .build();
+            orderItems.add(orderItem);
+        }
+
+        order.setOrderItems(orderItems);
+        order = orderRepository.save(order);
+        return mapToOrderDto(order);
     }
+
     public Order updateOrder(Long id, Order updatedOrder) {
         Order existingOrder = getOrderById(id);
         existingOrder.setStatus(updatedOrder.getStatus());
-//        existingOrder.setCustomer(updatedOrder.getCustomer());
         existingOrder.setOrderItems(updatedOrder.getOrderItems());
         return orderRepository.save(existingOrder);
     }
