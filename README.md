@@ -1,4 +1,4 @@
-# Coffee Shop Backend Service
+# Daily Brew Coffee Shop Backend
 
 ## What is this App
 This application is a backend service for a coffee shop, built using Java and Spring Boot. It connects to a PostgreSQL database to manage coffee shop data and provides APIs for the frontend application. The application also handles file uploads and integrates with Azure Storage for storing images.
