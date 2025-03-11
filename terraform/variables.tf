@@ -1,23 +1,33 @@
-variable "environment" {
-  description = "Environment (dev, staging, prod)"
+variable "resource_group" {
+  description = "Name of the resource group"
   type        = string
-  default     = "prod"
+  default     = "daily-brew-images-rg"
 }
 
-variable "location" {
-  description = "Azure region"
+variable "storage_account" {
+  description = "Name of the storage"
   type        = string
-  default     = "eastus"
+  default     = "dailybrewstorage"
 }
 
-variable "project_name" {
-  description = "Project name"
+variable "storage_container" {
+  description = "Name of the storage container"
   type        = string
-  default     = "daily-brew"
+  default     = "dailybrewcontainer"
 }
 
-variable "allowed_origins" {
-  description = "List of allowed CORS origins"
-  type        = list(string)
-  default     = ["*"]
+variable "postgres_admin" {
+  default = "pgadmin"
+}
+
+variable "postgres_password" {
+  default = "SuperSecurePassword123!"
+}
+
+variable "app_service_name" {
+  default = "my-app-service"
+}
+
+variable "postgres_server_name" {
+  default = "mypostgresdb"
 }
